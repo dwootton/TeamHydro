@@ -1,3 +1,4 @@
+
 //Changelog: Altered the way moisture was calculated, and now turns on and off the moisture sensors in order to prevent corrosion. 
 
 //Libraries
@@ -30,12 +31,31 @@ SimpleTimer timer;
 #define UVVPIN V6
 #define LedVPIN V10
 
+
 //Define Sensor Pins
 int m_Enable = 0;
 #define DHTPIN            D6
 #define DHTTYPE           DHT22
 DHT_Unified dht(DHTPIN, DHTTYPE);
 Adafruit_SI1145 uv = Adafruit_SI1145();
+
+// pH and Water Temp config
+// Define pH Info
+#define pHPin 3          //pH meter Analog output to Arduino Analog Input 0
+unsigned long int avgValue;  //Store the average value of the sensor feedback
+float b;
+int buf[10],temp;
+
+#include <Wire.h> // one of these is depreciated
+#include <OneWire.h> // one of these is depreciated
+#include <DallasTemperature.h>
+
+#define ONE_WIRE_BUS 2
+
+OneWire oneWire(ONE_WIRE_BUS);
+
+DallasTemperature waterTempSensor(&oneWire);
+
 
 //Define Neopixel Pins
 #define LEDPIN 15
@@ -150,6 +170,49 @@ digitalWrite(D7, LOW);
 Serial.println("Turning Off Moisture Sensor Bank");
 }
 
+//Calculates water Temp
+float calculateTemp(){
+  // call sensors.requestTemperatures() to issue a global temperature 
+  // request to all devices on the bus
+  Serial.print("Requesting temperatures...");
+  waterTempSensor.requestTemperatures(); // Send the command to get temperatures
+  Serial.println("DONE");
+  // After we got the temperatures, we can print them here.
+  // We use the function ByIndex, and as an example get the temperature from the first sensor only.
+  Serial.print("Temperature for the device 1 (index 0) is: ");
+  Serial.println(waterTempSensor.getTempCByIndex(0));  
+}
+
+//Calculates pH
+float calculatepH(){
+  pinMode(13,OUTPUT);  
+  Serial.begin(9600);  
+  Serial.println("Ready");    //Test the serial monitor
+
+  for(int i=0;i<10;i++)       //Get 10 sample value from the sensor for smooth the value
+  { 
+    buf[i]=analogRead(pHPin);
+    delay(10);
+  }
+
+  int n = sizeof(buf)/sizeof(buf[0]); 
+  
+  sort(buf, buf+n); 
+    
+  float avgValue=0;
+  
+  for(int i=2;i<8;i++)                    //take the average value of 6 center sample
+  {
+    avgValue+=buf[i];
+  }
+  
+  float phValue = avgValue*5.0/1024/6; //convert the analog into millivolt
+  phValue = 3.5*phValue;                      //convert the millivolt into pH value
+  Serial.print("    pH:");  
+  Serial.print(phValue,2);
+  Serial.println(" ");
+}
+
 //Calculates and Returns Sunlight Data Based on String Selection
 float calculateSunlight(String x)
 {
@@ -192,6 +255,8 @@ void upload()
 //Setup Function
 void setup()
 {
+  // Addition for water temp and such
+  waterTempSensor.begin();
 static const uint8_t D0   = 16;
 static const uint8_t D1   = 5;
 static const uint8_t D2   = 4;
